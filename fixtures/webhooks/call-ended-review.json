@@ -1,0 +1,26 @@
+{
+  "resource": "call",
+  "event": "call.ended",
+  "timestamp": 1780000085,
+  "token": "demo-webhook-token",
+  "data": {
+    "id": 82939104,
+    "direction": "inbound",
+    "status": "done",
+    "started_at": 1780000000,
+    "answered_at": 1780000010,
+    "ended_at": 1780000035,
+    "duration": 35,
+    "raw_digits": "+61400777888",
+    "user": {
+      "id": 123,
+      "name": "Jordan Lee",
+      "email": "jordan.lee@example.com"
+    },
+    "number": {
+      "id": 456,
+      "name": "AU Sales Line",
+      "digits": "+61 2 8000 0000"
+    }
+  }
+}

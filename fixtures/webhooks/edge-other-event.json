@@ -1,0 +1,11 @@
+{
+  "resource": "call",
+  "event": "call.created",
+  "timestamp": 1780000000,
+  "token": "demo-webhook-token",
+  "data": {
+    "id": 82939193,
+    "direction": "inbound",
+    "raw_digits": "+61400111222"
+  }
+}

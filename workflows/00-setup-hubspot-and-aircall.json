@@ -1,0 +1,305 @@
+{
+  "name": "00 · Setup : HubSpot properties, demo customers, Aircall tags",
+  "nodes": [
+    {
+      "id": "a74bd22c-ff4a-8b13-5296-f513b9fd2259",
+      "name": "Run Setup",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b0d6e944-5f26-7f96-f494-992c7a692b31",
+      "name": "Define Contact Properties",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        -220
+      ],
+      "parameters": {
+        "jsCode": "// Custom HubSpot contact properties used by the main workflow.\n// Safe to run repeatedly: \"already exists\" (409) responses are reported, not failed.\nconst props = [\n  {\n    name: 'aircall_churn_risk',\n    label: 'Aircall churn risk',\n    type: 'enumeration',\n    fieldType: 'select',\n    groupName: 'contactinformation',\n    description: 'Set by the Aircall AI call-intelligence workflow',\n    options: ['none', 'low', 'medium', 'high'].map((v, i) => ({ label: v[0].toUpperCase() + v.slice(1), value: v, displayOrder: i })),\n  },\n  { name: 'aircall_last_intent', label: 'Aircall last call intent', type: 'string', fieldType: 'text', groupName: 'contactinformation' },\n  { name: 'aircall_last_call_id', label: 'Aircall last call ID', type: 'string', fieldType: 'text', groupName: 'contactinformation' },\n];\nreturn props.map((p) => ({ json: p }));"
+      }
+    },
+    {
+      "id": "f0d2ddc6-2181-cbf9-fc4a-29c67b17df16",
+      "name": "HubSpot: Create Property",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        -220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/properties/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "809b754a-8c63-175c-4d91-349ed1c09e2f",
+      "name": "Define Demo Customers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Seeds the two EXISTING customers used by the support and cancellation demo scenarios.\n// (The sales/review/injection callers are intentionally unknown → contact gets created.)\nconst customers = [\n  {\n    company: { name: 'Brightline Logistics', domain: 'brightline-logistics.example' },\n    contact: { firstname: 'Tom', lastname: 'Nguyen', email: 'tom.nguyen@brightline-logistics.example', phone: '+61400333444', jobtitle: 'IT Manager', company: 'Brightline Logistics', lifecyclestage: 'customer' },\n  },\n  {\n    company: { name: 'Harbour Dental Group', domain: 'harbourdental.example' },\n    contact: { firstname: 'Priya', lastname: 'Shah', email: 'priya.shah@harbourdental.example', phone: '+61400555666', jobtitle: 'Operations Director', company: 'Harbour Dental Group', lifecyclestage: 'customer' },\n  },\n];\nreturn customers.map((c) => ({ json: c }));"
+      }
+    },
+    {
+      "id": "902c5b5d-6ddb-0d32-d179-fd9c30ef9039",
+      "name": "HubSpot: Create Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: $json.contact }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "10dd1e4c-d8a2-8a44-e258-83a937ab7d5f",
+      "name": "Contact Created?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "82e51e2a-3eeb-e1fd-0a87-278c64afd1ea",
+              "leftValue": "={{ $json.statusCode === 201 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "notes": "409 = already seeded → skip",
+      "notesInFlow": true
+    },
+    {
+      "id": "402473d8-bdc4-bd45-9568-86f9381b4b42",
+      "name": "HubSpot: Create Company",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        -60
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  properties: $('Define Demo Customers').item.json.company,\n  associations: [{ to: { id: $json.body.id }, types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 280 }] }]\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "3f606369-91c8-8223-45c2-69ae439e5c41",
+      "name": "Define Aircall Tags",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        240
+      ],
+      "parameters": {
+        "jsCode": "// Aircall tags the main workflow writes back. After running, copy each returned\n// tag ID into Config → aircall_tag_ids.\nconst tags = [\n  { name: 'AI-QUALIFIED-LEAD', color: '#00B388' },\n  { name: 'AI-SUPPORT-ISSUE', color: '#2A7FFF' },\n  { name: 'AI-CHURN-RISK', color: '#E5484D' },\n  { name: 'AI-NEEDS-REVIEW', color: '#F5A524' },\n  { name: 'AI-PROCESSED', color: '#8E8E93' },\n];\nreturn tags.map((t) => ({ json: t }));"
+      }
+    },
+    {
+      "id": "67655094-c1b2-66ca-9f5d-76ad03f1c876",
+      "name": "Aircall: Create Tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        240
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.aircall.io/v1/tags",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "3b728139-21ad-52fc-fcdb-d15287d3a4fb",
+      "name": "Sticky · About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -520
+      ],
+      "parameters": {
+        "content": "## One-time setup : run once, then use 01\n1. **HubSpot properties** used by the workflow (`aircall_churn_risk`, `aircall_last_intent`, `aircall_last_call_id`).\n2. **Demo customers** for the support + cancellation scenarios (existing customers).\n3. **Aircall tags** *(disabled : enable once you have Aircall API credentials, then copy tag IDs into Config)*.\n\nSafe to re-run: existing records return 409.",
+        "width": 1180,
+        "height": 300,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Run Setup": {
+      "main": [
+        [
+          {
+            "node": "Define Contact Properties",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Define Demo Customers",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Define Aircall Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define Contact Properties": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Create Property",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define Demo Customers": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Create Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Create Contact": {
+      "main": [
+        [
+          {
+            "node": "Contact Created?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Created?": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Create Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define Aircall Tags": {
+      "main": [
+        [
+          {
+            "node": "Aircall: Create Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

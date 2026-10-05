@@ -1,0 +1,17 @@
+{
+  "name": "ai-post-call-revenue-orchestrator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An n8n prototype for guarded post-call CRM orchestration using Aircall-style events.",
+  "type": "module",
+  "scripts": {
+    "build": "node src/build.mjs",
+    "validate": "node src/build.mjs --check",
+    "build:test": "node src/build.mjs --test",
+    "validate:test": "node src/build.mjs --test --check",
+    "test:e2e": "node test/e2e.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

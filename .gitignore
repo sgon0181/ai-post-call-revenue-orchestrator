@@ -1,0 +1,12 @@
+test/.generated/
+test/.n8n-data/
+node_modules/
+.DS_Store
+.env
+.env.*
+.local-n8n/
+
+# Local reference material; not part of the portfolio project.
+n8n QS101 Certificate _ n8n.pdf
+▶️ Customer service agent - n8n.html
+▶️ Customer service agent - n8n_files/

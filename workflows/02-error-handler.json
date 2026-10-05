@@ -1,0 +1,165 @@
+{
+  "name": "02 · Aircall Automation : Error Handler",
+  "nodes": [
+    {
+      "id": "44065060-a11f-fb8e-8c87-3286ef0e83d2",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a5827d1f-94a6-18e7-4170-213f0aa17bf6",
+      "name": "Build Dead Letter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Runs whenever the main workflow fails after its node-level retries (3 tries, backoff).\n// Classifies the failure, stores it in a dead-letter list and alerts engineering.\nconst SLACK_WEBHOOK_URL = ''; // engineering alerts channel; empty → dry run\n\nconst e = $input.first().json;\nconst message = e.execution?.error?.message ?? e.trigger?.error?.message ?? 'unknown error';\nconst description = e.execution?.error?.description ?? '';\nconst text = `${message} ${description}`;\n\nconst retryable = /\\b429\\b|rate limit|\\b5\\d\\d\\b|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up/i.test(text);\nconst category = /\\b401\\b|\\b403\\b|unauthori[sz]ed|forbidden|credential/i.test(text) ? 'auth'\n  : /\\b429\\b|rate limit/i.test(text) ? 'rate_limited'\n  : /\\b5\\d\\d\\b|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED/i.test(text) ? 'upstream_unavailable'\n  : /\\b4\\d\\d\\b/.test(text) ? 'bad_request'\n  : 'workflow_bug';\n\nconst record = {\n  failed_at: new Date().toISOString(),\n  workflow: e.workflow?.name ?? null,\n  execution_id: e.execution?.id ?? null,\n  execution_url: e.execution?.url ?? null,\n  mode: e.execution?.mode ?? null,\n  failed_node: e.execution?.lastNodeExecuted ?? null,\n  error: message.slice(0, 500),\n  category,\n  retryable,\n  // The idempotency key is never marked \"completed\" for a failed run. n8n \"Retry\"\n  // resumes at the failed node; a redelivered webhook re-claims after the lock expires.\n  replay_hint: retryable ? 'Retry the execution in n8n once the upstream recovers (resumes at the failed node).' : 'Fix the root cause, then retry the execution in n8n.',\n};\n\nconst store = $getWorkflowStaticData('global');\nstore.dead_letters = [record, ...(store.dead_letters ?? [])].slice(0, 200);\n\nconst slack_payload = {\n  text: `🧯 Aircall automation failure : ${record.failed_node}`,\n  blocks: [\n    { type: 'header', text: { type: 'plain_text', text: '🧯 Aircall → HubSpot automation failed', emoji: true } },\n    { type: 'section', text: { type: 'mrkdwn', text: `*Node:* ${record.failed_node}\\n*Category:* ${category}${retryable ? ' (retryable)' : ''}\\n*Error:* \\`${record.error}\\`\\n*Next step:* ${record.replay_hint}` } },\n    ...(record.execution_url ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'Open execution' }, url: record.execution_url }] }] : []),\n  ],\n};\n\nreturn [{ json: { dead_letter: record, slack_webhook_url: SLACK_WEBHOOK_URL, slack_payload, dead_letter_count: store.dead_letters.length } }];"
+      }
+    },
+    {
+      "id": "124701ef-9c6a-3731-086a-0ba7b2165a8f",
+      "name": "Slack Configured?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2b9a8942-7a0e-779b-33dc-7a9b507941e7",
+              "leftValue": "={{ !!$json.slack_webhook_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "2c52848b-07ff-264a-9f59-9e75245e4d9d",
+      "name": "Slack: Engineering Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -110
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.slack_webhook_url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.slack_payload) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "9cdfa1c4-daee-6328-d60e-7f874c905c91",
+      "name": "Slack: Dry Run",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        660,
+        110
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "2e1206ea-af52-5cad-a003-5d60e3774e4d",
+      "name": "Sticky · About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -300
+      ],
+      "parameters": {
+        "content": "## Error handler\nSet as **Error Workflow** in *01 · Aircall → HubSpot* → Settings.\n\nEvery HTTP node already retries 3× with backoff (429 / 5xx). Anything that still fails lands here: classified (auth / rate-limited / upstream / bad request / bug), stored as a dead letter, and alerted.\n\nThe idempotency key was never marked *completed*, so replaying the execution is safe.",
+        "width": 920,
+        "height": 560,
+        "color": 3
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Dead Letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Dead Letter": {
+      "main": [
+        [
+          {
+            "node": "Slack Configured?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Configured?": {
+      "main": [
+        [
+          {
+            "node": "Slack: Engineering Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Dry Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
