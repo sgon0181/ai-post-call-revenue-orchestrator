@@ -26,7 +26,7 @@ const config = {
   // AI configuration
   openai_model: 'gpt-4.1-mini',
   openai_temperature: 0,        // set to null for models that only accept the default
-  confidence_threshold: 0.85,   // below this → human review, no CRM side effects
+  confidence_threshold: 0.85,   // below this: human review; intake and audit notes may already exist
 
   hubspot: {
     portal_id: '',              // optional: enables "Open in HubSpot" links in Slack
